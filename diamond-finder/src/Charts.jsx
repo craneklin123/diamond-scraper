@@ -3,7 +3,7 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { GroupedScatter } from './GroupedScatter.jsx';
+import { ParallelCoords } from './ParallelCoords.jsx';
 
 const CLARITY_ORDER = ['FL', 'IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1', 'I2', 'I3'];
 const COLOR_ORDER   = ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'];
@@ -12,7 +12,7 @@ const METRICS = [
   { key: 'carat',   label: 'Price vs Carat',  xLabel: 'Carat Weight'  },
   { key: 'color',   label: 'Price vs Color',   xLabel: 'Color Grade'   },
   { key: 'clarity', label: 'Price vs Clarity', xLabel: 'Clarity Grade' },
-  { key: 'grouped', label: 'Color × Clarity',  xLabel: ''              },
+  { key: 'grouped', label: 'All Attributes',    xLabel: ''              },
 ];
 
 function toX(row, metric) {
@@ -122,7 +122,7 @@ export function Charts({ rows, selected, onSelect }) {
     return (
       <div className="charts-panel">
         {tabs}
-        <GroupedScatter rows={rows} selected={selected} onSelect={onSelect} />
+        <ParallelCoords rows={rows} selected={selected} onSelect={onSelect} />
       </div>
     );
   }
