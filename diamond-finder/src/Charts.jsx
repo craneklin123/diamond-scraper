@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -9,16 +9,17 @@ const CLARITY_ORDER = ['FL', 'IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', '
 const COLOR_ORDER   = ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'];
 
 const METRICS = [
-  { key: 'carat',   label: 'Price vs Carat',   xLabel: 'Carat Weight' },
-  { key: 'color',   label: 'Price vs Color',    xLabel: 'Color Grade'  },
-  { key: 'clarity', label: 'Price vs Clarity',  xLabel: 'Clarity Grade'},
-  { key: 'grouped', label: 'Color × Clarity',   xLabel: '' },
+  { key: 'carat',   label: 'Price vs Carat',  xLabel: 'Carat Weight'  },
+  { key: 'color',   label: 'Price vs Color',   xLabel: 'Color Grade'   },
+  { key: 'clarity', label: 'Price vs Clarity', xLabel: 'Clarity Grade' },
+  { key: 'grouped', label: 'Color × Clarity',  xLabel: ''              },
 ];
 
 function toX(row, metric) {
   if (metric === 'carat')   return parseFloat(row['Carat Weight']);
   if (metric === 'color')   return COLOR_ORDER.indexOf(row['Color Grade']);
   if (metric === 'clarity') return CLARITY_ORDER.indexOf(row['Clarity Grade']);
+  return null;
 }
 
 function xLabel(val, metric) {
@@ -31,7 +32,11 @@ function rowKey(r) {
   return `${r.Vendor}::${r['Vendor SKU']}::${r.Price}`;
 }
 
-// Custom dot — closes over selected + onSelect so Recharts can render it.
+function priceLabel(v) {
+  if (v >= 1000) return `$${(v / 1000).toFixed(1)}k`;
+  return `$${v}`;
+}
+
 function makeDotShape(selected, onSelect) {
   return function DiamondDot({ cx, cy, payload }) {
     if (cx == null || cy == null) return null;
@@ -55,7 +60,7 @@ function makeDotShape(selected, onSelect) {
 function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
-  if (!d) return null;
+  if (!d?.row) return null;
   const r = d.row;
   return (
     <div className="chart-tooltip">
@@ -71,59 +76,60 @@ function CustomTooltip({ active, payload }) {
 
 export function Charts({ rows, selected, onSelect }) {
   const [metric, setMetric] = useState('carat');
-  const panelRef = useRef(null);
-  const panelWidth = panelRef.current?.clientWidth || 860;
 
-  if (metric === 'grouped') {
-    return (
-      <div className="charts-panel" ref={panelRef}>
-        <div className="chart-tabs">
-          {METRICS.map(m => (
-            <button key={m.key} className={`chart-tab ${metric === m.key ? 'active' : ''}`}
-              onClick={() => setMetric(m.key)}>{m.label}</button>
-          ))}
-        </div>
-        <GroupedScatter rows={rows} selected={selected} onSelect={onSelect}
-          width={Math.max(600, panelWidth - 32)} />
-      </div>
-    );
-  }
-
-  const chartData = rows
-    .map(r => ({ x: toX(r, metric), y: parseFloat(r.Price), row: r }))
-    .filter(d => d.x != null && d.x !== -1 && !isNaN(d.x) && !isNaN(d.y));
-
-  const labData   = chartData.filter(d => d.row.Origin === 'Lab Grown');
-  const minedData = chartData.filter(d => d.row.Origin !== 'Lab Grown');
-
+  // ── All hooks must be called unconditionally ──────────────────────────────
   const DotShape = useCallback(
     makeDotShape(selected, onSelect),
     [selected, onSelect]
   );
 
-  const isCategorical = metric !== 'carat';
-  const catOrder = metric === 'color' ? COLOR_ORDER : CLARITY_ORDER;
-  const ticks = isCategorical ? catOrder.map((_, i) => i) : undefined;
-  const domain = isCategorical ? [-0.5, catOrder.length - 0.5] : ['auto', 'auto'];
+  const chartData = metric !== 'grouped'
+    ? rows
+        .map(r => ({ x: toX(r, metric), y: parseFloat(r.Price), row: r }))
+        .filter(d => d.x != null && d.x !== -1 && !isNaN(d.x) && !isNaN(d.y))
+    : [];
 
-  return (
-    <div className="charts-panel" ref={panelRef}>
-      <div className="chart-tabs">
-        {METRICS.map(m => (
-          <button
-            key={m.key}
-            className={`chart-tab ${metric === m.key ? 'active' : ''}`}
-            onClick={() => setMetric(m.key)}
-          >
-            {m.label}
-          </button>
-        ))}
+  const labData   = chartData.filter(d => d.row.Origin === 'Lab Grown');
+  const minedData = chartData.filter(d => d.row.Origin !== 'Lab Grown');
+
+  const isCategorical = metric === 'color' || metric === 'clarity';
+  const catOrder = metric === 'color' ? COLOR_ORDER : CLARITY_ORDER;
+  const ticks  = isCategorical ? catOrder.map((_, i) => i) : undefined;
+  const domain = isCategorical ? [-0.5, catOrder.length - 0.5] : ['auto', 'auto'];
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const tabs = (
+    <div className="chart-tabs">
+      {METRICS.map(m => (
+        <button
+          key={m.key}
+          className={`chart-tab ${metric === m.key ? 'active' : ''}`}
+          onClick={() => setMetric(m.key)}
+        >
+          {m.label}
+        </button>
+      ))}
+      {metric !== 'grouped' && (
         <div className="chart-legend">
           <span className="legend-dot lab" /> Lab Grown
           <span className="legend-dot mined" /> Mined
         </div>
-      </div>
+      )}
+    </div>
+  );
 
+  if (metric === 'grouped') {
+    return (
+      <div className="charts-panel">
+        {tabs}
+        <GroupedScatter rows={rows} selected={selected} onSelect={onSelect} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="charts-panel">
+      {tabs}
       <ResponsiveContainer width="100%" height={280}>
         <ScatterChart margin={{ top: 10, right: 24, bottom: 30, left: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e4" />
@@ -134,15 +140,18 @@ export function Charts({ rows, selected, onSelect }) {
             domain={domain}
             ticks={ticks}
             tickFormatter={v => xLabel(v, metric)}
-            label={{ value: METRICS.find(m => m.key === metric).xLabel, position: 'insideBottom', offset: -16, fontSize: 12, fill: '#6b7280' }}
+            label={{
+              value: METRICS.find(m => m.key === metric).xLabel,
+              position: 'insideBottom', offset: -16, fontSize: 12, fill: '#6b7280',
+            }}
             tick={{ fontSize: 12, fill: '#6b7280' }}
           />
           <YAxis
             dataKey="y"
             name="Price"
-            tickFormatter={v => `$${(v / 1000).toFixed(0)}k`}
+            tickFormatter={priceLabel}
             tick={{ fontSize: 12, fill: '#6b7280' }}
-            width={48}
+            width={56}
           />
           <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
           {labData.length > 0 && (

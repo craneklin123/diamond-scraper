@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 
 const COLOR_ORDER   = ['D','E','F','G','H','I','J','K','L','M'];
 const CLARITY_ORDER = ['FL','IF','VVS1','VVS2','VS1','VS2','SI1','SI2'];
@@ -20,11 +20,22 @@ function nicePrice(p) {
   return `$${Math.round(p)}`;
 }
 
-export function GroupedScatter({ rows, selected, onSelect, width = 900 }) {
-  const [hovered, setHovered] = useState(null);   // { row, svgX, svgY }
+export function GroupedScatter({ rows, selected, onSelect }) {
+  const [hovered, setHovered] = useState(null);
+  const [width, setWidth] = useState(860);
+  const containerRef = useRef(null);
   const svgRef = useRef(null);
 
-  const innerW = width - MARGIN.left - MARGIN.right;
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(entries => setWidth(entries[0].contentRect.width));
+    obs.observe(el);
+    setWidth(el.clientWidth || 860);
+    return () => obs.disconnect();
+  }, []);
+
+  const innerW = Math.max(200, width - MARGIN.left - MARGIN.right);
   const innerH = HEIGHT - MARGIN.top - MARGIN.bottom;
 
   // Only include rows with known color + clarity
@@ -108,8 +119,12 @@ export function GroupedScatter({ rows, selected, onSelect, width = 900 }) {
     setHovered({ row, screenX: e.clientX - rect.left, screenY: e.clientY - rect.top });
   }, []);
 
+  if (!usedColors.length || !usedClarities.length) {
+    return <div style={{ padding: 40, color: '#9ca3af', textAlign: 'center' }}>Not enough color/clarity data to display this chart.</div>;
+  }
+
   return (
-    <div style={{ position: 'relative', overflowX: 'auto' }}>
+    <div ref={containerRef} style={{ position: 'relative', width: '100%', overflowX: 'auto' }}>
       <svg
         ref={svgRef}
         width={width}
