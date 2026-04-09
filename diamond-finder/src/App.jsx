@@ -151,7 +151,7 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div className="header-inner">
-          <h1>Diamond Finder</h1>
+          <h1>Diamond Finder <span style={{fontSize:11,fontWeight:400,color:'#9ca3af'}}>v2</span></h1>
           <div className="header-meta">
             <span>{filtered.length.toLocaleString()} results</span>
             <span className="dot">·</span>
