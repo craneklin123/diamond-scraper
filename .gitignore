@@ -1,0 +1,42 @@
+# ── Exclude everything by default, then whitelist diamond project files ──
+
+# Exclude all other projects in this workspace
+fire-calc/
+bot/
+spy-predictor/
+mug-designs/
+weekend-optimizer/
+ref-scheduler/
+
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Build output
+dist/
+build/
+
+# Scrapy / Python cache
+.scrapy/
+*.egg-info/
+
+# Mac junk
+__MACOSX/
+.DS_Store
+**/.DS_Store
+
+# Logs — may contain local paths
+*.log
+scrape.log
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
