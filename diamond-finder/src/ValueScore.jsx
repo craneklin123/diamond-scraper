@@ -81,8 +81,9 @@ export function ValueScore({ rows, selected, onSelect }) {
     const prices = chartData.map(d => d.y);
     const min = Math.min(...prices);
     const max = Math.max(...prices);
-    const pad = (max - min) * 0.05;
-    return [min - pad, max + pad];
+    const range = max - min;
+    const step = range < 1000 ? 100 : range < 5000 ? 500 : 1000;
+    return [Math.floor(min / step) * step, Math.ceil(max / step) * step];
   }, [chartData]);
 
   const labData   = chartData.filter(d => d.row.Origin === 'Lab Grown');
@@ -172,6 +173,7 @@ export function ValueScore({ rows, selected, onSelect }) {
             name="Price"
             reversed
             domain={priceDomain}
+            allowDecimals={false}
             tickFormatter={priceLabel}
             tick={{ fontSize: 12, fill: '#6b7280' }}
             width={56}
