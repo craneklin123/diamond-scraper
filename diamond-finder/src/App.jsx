@@ -263,6 +263,11 @@ export default function App() {
             <div className="empty">No diamonds match your filters.</div>
           ) : (
             <div className="table-wrap">
+              {filtered.length > 500 && (
+                <div className="table-cap-notice">
+                  Showing first 500 of {filtered.length.toLocaleString()} results — use filters to narrow down.
+                </div>
+              )}
               <table>
                 <thead>
                   <tr>
@@ -282,7 +287,7 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r, i) => {
+                  {filtered.slice(0, 500).map((r, i) => {
                     const isSel = selected &&
                       `${selected.Vendor}::${selected['Vendor SKU']}::${selected.Price}` ===
                       `${r.Vendor}::${r['Vendor SKU']}::${r.Price}`;

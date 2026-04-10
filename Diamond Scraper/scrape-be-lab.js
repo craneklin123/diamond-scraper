@@ -63,7 +63,7 @@ function parseBEDiamond(d) {
   return {
     Vendor: 'Brilliant Earth',
     'Vendor SKU': d.upc || String(d.id),
-    Link: `https://www.brilliantearth.com/loose-diamonds/view_detail/${d.id}/`,
+    Link: null, // BE lab diamond product URLs aren't derivable from the API id field
     Price: d.price,
     Shape: normalizeShape(d.shape),
     'Carat Weight': d.carat,
