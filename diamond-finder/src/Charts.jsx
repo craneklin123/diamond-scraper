@@ -78,7 +78,7 @@ function CustomTooltip({ active, payload }) {
   );
 }
 
-export function Charts({ rows, selected, onSelect }) {
+export function Charts({ rows, selected, onSelect, weights, onWeightsChange }) {
   const [metric, setMetric] = useState('score');
 
   // ── All hooks must be called unconditionally ──────────────────────────────
@@ -144,7 +144,7 @@ export function Charts({ rows, selected, onSelect }) {
     return (
       <div className="charts-panel">
         {tabs}
-        <ValueScore rows={rows} selected={selected} onSelect={onSelect} />
+        <ValueScore rows={rows} selected={selected} onSelect={onSelect} weights={weights} onWeightsChange={onWeightsChange} />
       </div>
     );
   }

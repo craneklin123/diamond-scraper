@@ -8,7 +8,7 @@ const CLARITY_ORDER = ['FL','IF','VVS1','VVS2','VS1','VS2','SI1','SI2','I1','I2'
 const COLOR_ORDER   = ['D','E','F','G','H','I','J','K','L','M'];
 const CUT_ORDER     = ['Ideal','Super Ideal','Excellent','Very Good','Good','Fair','Poor'];
 
-const DEFAULT_WEIGHTS = { carat: 3, cut: 2, clarity: 1, color: 1 };
+const DEFAULT_WEIGHTS = { carat: 10, cut: 5, clarity: 1, color: 3 };
 
 function scoreRow(r, weights, caratRange) {
   const carat   = parseFloat(r['Carat Weight']);
@@ -55,10 +55,9 @@ function ScoreTooltip({ active, payload }) {
   );
 }
 
-export function ValueScore({ rows, selected, onSelect }) {
-  const [draft, setDraft]     = useState(DEFAULT_WEIGHTS);
-  const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
-  const [flash, setFlash]     = useState(false);
+export function ValueScore({ rows, selected, onSelect, weights, onWeightsChange }) {
+  const [draft, setDraft] = useState(weights ?? DEFAULT_WEIGHTS);
+  const [flash, setFlash] = useState(false);
 
   const caratRange = useMemo(() => {
     const vals = rows.map(r => parseFloat(r['Carat Weight'])).filter(v => !isNaN(v));
@@ -110,7 +109,7 @@ export function ValueScore({ rows, selected, onSelect }) {
   }
 
   function recalculate() {
-    setWeights({ ...draft });
+    onWeightsChange({ ...draft });
     setFlash(true);
     setTimeout(() => setFlash(false), 600);
   }

@@ -51,6 +51,8 @@ function sortRows(rows, col, dir) {
   });
 }
 
+const DEFAULT_WEIGHTS = { carat: 10, cut: 5, color: 3, clarity: 1 };
+
 function parseUrlFilters() {
   const p = new URLSearchParams(window.location.search);
   const getArr = k => p.has(k) ? p.get(k).split(',').map(s => decodeURIComponent(s)).filter(Boolean) : null;
@@ -62,6 +64,12 @@ function parseUrlFilters() {
     labs:     getArr('labs'),
     priceMax: getNum('priceMax'),
     caratMin: getNum('caratMin'),
+    weights: (p.has('wCarat') || p.has('wCut') || p.has('wColor') || p.has('wClarity')) ? {
+      carat:   getNum('wCarat')   ?? DEFAULT_WEIGHTS.carat,
+      cut:     getNum('wCut')     ?? DEFAULT_WEIGHTS.cut,
+      color:   getNum('wColor')   ?? DEFAULT_WEIGHTS.color,
+      clarity: getNum('wClarity') ?? DEFAULT_WEIGHTS.clarity,
+    } : null,
   };
 }
 
@@ -104,6 +112,7 @@ export default function App() {
   const selectedRowRef = useRef(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [weights, setWeights] = useState(URL_INIT.weights ?? DEFAULT_WEIGHTS);
 
   // Sync filters → URL
   useEffect(() => {
@@ -114,9 +123,13 @@ export default function App() {
     if (labs.length)    p.set('labs',     labs.map(encodeURIComponent).join(','));
     if (priceMax !== 3000) p.set('priceMax', priceMax);
     if (caratMin !== 0)    p.set('caratMin', caratMin);
+    p.set('wCarat',   weights.carat);
+    p.set('wCut',     weights.cut);
+    p.set('wColor',   weights.color);
+    p.set('wClarity', weights.clarity);
     const qs = p.toString();
     history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
-  }, [shapes, origins, vendors, labs, priceMax, caratMin]);
+  }, [shapes, origins, vendors, labs, priceMax, caratMin, weights]);
 
   function shareFilters() {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -273,7 +286,7 @@ export default function App() {
 
         <main className="results">
           <AboutBanner />
-          <Charts rows={filtered} selected={selected} onSelect={handleSelect} />
+          <Charts rows={filtered} selected={selected} onSelect={handleSelect} weights={weights} onWeightsChange={setWeights} />
 
           {selected && (
             <div className="selected-card">
