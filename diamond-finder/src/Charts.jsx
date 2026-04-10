@@ -4,6 +4,7 @@ import {
   Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { ParallelCoords } from './ParallelCoords.jsx';
+import { BoxPlots } from './BoxPlots.jsx';
 
 const CLARITY_ORDER = ['FL', 'IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1', 'I2', 'I3'];
 const COLOR_ORDER   = ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'];
@@ -12,7 +13,8 @@ const METRICS = [
   { key: 'carat',   label: 'Price vs Carat',  xLabel: 'Carat Weight'  },
   { key: 'color',   label: 'Price vs Color',   xLabel: 'Color Grade'   },
   { key: 'clarity', label: 'Price vs Clarity', xLabel: 'Clarity Grade' },
-  { key: 'grouped', label: 'All Attributes',    xLabel: ''              },
+  { key: 'grouped', label: 'All Attributes',   xLabel: ''              },
+  { key: 'value',   label: '$/ct Analysis',    xLabel: ''              },
 ];
 
 function toX(row, metric) {
@@ -83,7 +85,7 @@ export function Charts({ rows, selected, onSelect }) {
     [selected, onSelect]
   );
 
-  const chartData = metric !== 'grouped'
+  const chartData = metric !== 'grouped' && metric !== 'value'
     ? rows
         .map(r => ({ x: toX(r, metric), y: parseFloat(r.Price), row: r }))
         .filter(d => d.x != null && d.x !== -1 && !isNaN(d.x) && !isNaN(d.y))
@@ -109,7 +111,7 @@ export function Charts({ rows, selected, onSelect }) {
           {m.label}
         </button>
       ))}
-      {metric !== 'grouped' && (
+      {metric !== 'grouped' && metric !== 'value' && (
         <div className="chart-legend">
           <span className="legend-dot lab" /> Lab Grown
           <span className="legend-dot mined" /> Mined
@@ -123,6 +125,15 @@ export function Charts({ rows, selected, onSelect }) {
       <div className="charts-panel">
         {tabs}
         <ParallelCoords rows={rows} selected={selected} onSelect={onSelect} />
+      </div>
+    );
+  }
+
+  if (metric === 'value') {
+    return (
+      <div className="charts-panel">
+        {tabs}
+        <BoxPlots rows={rows} />
       </div>
     );
   }

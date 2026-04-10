@@ -372,3 +372,110 @@ tbody tr.row-selected td { font-weight: 500; }
   transition: all 0.15s;
 }
 .sc-close:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Filter toggle (mobile) */
+.filter-toggle {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 19;
+}
+
+/* Box plot styles */
+.box-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.box-legend-hint {
+  margin-left: auto;
+  color: #9ca3af;
+  font-size: 11px;
+}
+.box-grid {
+  display: grid;
+  gap: 12px;
+}
+.box-tip {
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 10;
+  min-width: 160px;
+  line-height: 1.6;
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  :root { --sidebar-w: 260px; }
+
+  .filter-toggle { display: flex; }
+
+  /* Sidebar becomes a fixed left drawer */
+  .sidebar {
+    position: fixed;
+    top: var(--header-h);
+    left: 0;
+    height: calc(100vh - var(--header-h));
+    z-index: 20;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.12);
+  }
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+  .sidebar-overlay { display: block; }
+
+  .results {
+    padding: 12px 14px;
+    min-width: 0;
+  }
+
+  .header-inner {
+    padding: 0 14px;
+    gap: 10px;
+  }
+  .header h1 { font-size: 16px; }
+  .header-meta { font-size: 12px; }
+  .dot { display: none; }
+  .header-meta span:nth-child(n+3) { display: none; }
+
+  .chart-tabs { gap: 6px; }
+  .chart-tab { padding: 4px 10px; font-size: 12px; }
+
+  .box-legend-hint { display: none; }
+
+  /* Table: let it scroll */
+  .table-wrap { font-size: 12px; }
+  td, thead th { padding: 8px 10px; }
+
+  .selected-card { flex-direction: column; gap: 10px; }
+  .sc-price { font-size: 18px; }
+}

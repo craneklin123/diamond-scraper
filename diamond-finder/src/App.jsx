@@ -85,6 +85,7 @@ export default function App() {
   const [sort, setSort] = useState({ col: 'Price', dir: 'asc' });
   const [selected, setSelected] = useState(null);
   const selectedRowRef = useRef(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const loaded = [];
@@ -151,6 +152,9 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div className="header-inner">
+          <button className="filter-toggle" onClick={() => setSidebarOpen(o => !o)} aria-label="Toggle filters">
+            ☰ Filters
+          </button>
           <h1>Diamond Finder <span style={{fontSize:11,fontWeight:400,color:'#9ca3af'}}>v2</span></h1>
           <div className="header-meta">
             <span>{filtered.length.toLocaleString()} results</span>
@@ -166,8 +170,9 @@ export default function App() {
         </div>
       </header>
 
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
       <div className="layout">
-        <aside className="sidebar">
+        <aside className={`sidebar${sidebarOpen ? ' sidebar-open' : ''}`}>
           <div className="filter-section">
             <div className="filter-label">
               Max Price
