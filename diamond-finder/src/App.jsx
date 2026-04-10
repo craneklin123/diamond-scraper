@@ -231,6 +231,7 @@ export default function App() {
         </aside>
 
         <main className="results">
+          <AboutBanner />
           <Charts rows={filtered} selected={selected} onSelect={handleSelect} />
 
           {selected && (
@@ -307,6 +308,31 @@ export default function App() {
           )}
         </main>
       </div>
+    </div>
+  );
+}
+
+function AboutBanner() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="about-banner">
+      <div className="about-summary">
+        <strong>Diamond Finder</strong> — compare lab-grown and natural diamonds across vendors.
+        Use the filters on the left to narrow by shape, price, carat, and more.
+        Click any chart point or table row to see details and a link to buy.
+        {' '}
+        <button className="about-toggle" onClick={() => setOpen(o => !o)}>
+          {open ? 'Hide info' : 'How it works'}
+        </button>
+      </div>
+      {open && (
+        <div className="about-details">
+          <p><strong>What is this?</strong> A tool to browse and compare diamonds from multiple vendors side-by-side. Data is scraped periodically so prices may vary — always verify on the vendor's site before purchasing.</p>
+          <p><strong>Vendors:</strong> Brilliant Earth, James Allen, Clean Origin. Lab-grown diamonds are significantly cheaper than mined for the same specs.</p>
+          <p><strong>Charts:</strong> The "All Attributes" view lets you drag axes to filter by multiple dimensions at once. The scatter charts show price vs. a single attribute — click any dot to highlight that diamond in the table below.</p>
+          <p><strong>Tips:</strong> Sort by Price ↑ to find the best deals. Filter by shape first (Round and Oval tend to have the most inventory). Lab-grown diamonds offer the best value per carat.</p>
+        </div>
+      )}
     </div>
   );
 }

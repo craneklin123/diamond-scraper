@@ -77,7 +77,7 @@ function CustomTooltip({ active, payload }) {
 }
 
 export function Charts({ rows, selected, onSelect }) {
-  const [metric, setMetric] = useState('carat');
+  const [metric, setMetric] = useState('grouped');
 
   // ── All hooks must be called unconditionally ──────────────────────────────
   const DotShape = useCallback(
