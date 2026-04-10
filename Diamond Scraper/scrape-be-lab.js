@@ -25,6 +25,14 @@ const OUTPUT_DIR = path.join(__dirname, 'diamond_scraper', 'diamond_scraper');
 const OUT_FILE   = path.join(OUTPUT_DIR, 'brilliantearth.csv');
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function jitter(min = 600, max = 1800) { return sleep(min + Math.random() * (max - min)); }
+async function maybeLongPause(pageNum, every = 25) {
+  if (pageNum % every === 0) {
+    const pause = 5000 + Math.random() * 5000;
+    console.log(`  [pause] ${(pause/1000).toFixed(1)}s break after page ${pageNum}...`);
+    await sleep(pause);
+  }
+}
 
 function toCsvRow(keys, r) {
   return keys.map(k => {
@@ -276,7 +284,8 @@ async function main() {
 
     if (products.length < 50) { console.log('Last page.'); break; }
     pageNum++;
-    await sleep(400);
+    await maybeLongPause(pageNum);
+    await jitter(600, 1600);
   }
 
   await browser.close();
