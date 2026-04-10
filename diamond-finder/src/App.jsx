@@ -51,8 +51,25 @@ function sortRows(rows, col, dir) {
   });
 }
 
-function useLocalStorage(key, def) {
+function parseUrlFilters() {
+  const p = new URLSearchParams(window.location.search);
+  const getArr = k => p.has(k) ? p.get(k).split(',').map(s => decodeURIComponent(s)).filter(Boolean) : null;
+  const getNum = k => p.has(k) ? Number(p.get(k)) : null;
+  return {
+    shapes:   getArr('shapes'),
+    origins:  getArr('origins'),
+    vendors:  getArr('vendors'),
+    labs:     getArr('labs'),
+    priceMax: getNum('priceMax'),
+    caratMin: getNum('caratMin'),
+  };
+}
+
+const URL_INIT = parseUrlFilters();
+
+function useLocalStorage(key, def, urlOverride) {
   const [val, setVal] = useState(() => {
+    if (urlOverride !== null && urlOverride !== undefined) return urlOverride;
     try { return JSON.parse(localStorage.getItem(key)) ?? def; }
     catch { return def; }
   });
@@ -76,16 +93,37 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [loadedVendors, setLoadedVendors] = useState([]);
 
-  const [shapes, setShapes] = useLocalStorage('df_shapes', []);
-  const [origins, setOrigins] = useLocalStorage('df_origins', []);
-  const [vendors, setVendors] = useLocalStorage('df_vendors', []);
-  const [labs, setLabs] = useLocalStorage('df_labs', []);
-  const [priceMax, setPriceMax] = useLocalStorage('df_priceMax', 3000);
-  const [caratMin, setCaratMin] = useLocalStorage('df_caratMin', 0);
+  const [shapes, setShapes] = useLocalStorage('df_shapes', [], URL_INIT.shapes);
+  const [origins, setOrigins] = useLocalStorage('df_origins', [], URL_INIT.origins);
+  const [vendors, setVendors] = useLocalStorage('df_vendors', [], URL_INIT.vendors);
+  const [labs, setLabs] = useLocalStorage('df_labs', [], URL_INIT.labs);
+  const [priceMax, setPriceMax] = useLocalStorage('df_priceMax', 3000, URL_INIT.priceMax);
+  const [caratMin, setCaratMin] = useLocalStorage('df_caratMin', 0, URL_INIT.caratMin);
   const [sort, setSort] = useState({ col: 'Price', dir: 'asc' });
   const [selected, setSelected] = useState(null);
   const selectedRowRef = useRef(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  // Sync filters → URL
+  useEffect(() => {
+    const p = new URLSearchParams();
+    if (shapes.length)  p.set('shapes',   shapes.map(encodeURIComponent).join(','));
+    if (origins.length) p.set('origins',  origins.map(encodeURIComponent).join(','));
+    if (vendors.length) p.set('vendors',  vendors.map(encodeURIComponent).join(','));
+    if (labs.length)    p.set('labs',     labs.map(encodeURIComponent).join(','));
+    if (priceMax !== 3000) p.set('priceMax', priceMax);
+    if (caratMin !== 0)    p.set('caratMin', caratMin);
+    const qs = p.toString();
+    history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+  }, [shapes, origins, vendors, labs, priceMax, caratMin]);
+
+  function shareFilters() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    });
+  }
 
   useEffect(() => {
     const loaded = [];
@@ -167,6 +205,9 @@ export default function App() {
               </>
             )}
           </div>
+          <button className="share-btn" onClick={shareFilters}>
+            {shareCopied ? 'Copied!' : 'Share filters'}
+          </button>
         </div>
       </header>
 

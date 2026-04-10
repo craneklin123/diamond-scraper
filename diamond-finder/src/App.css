@@ -74,6 +74,23 @@ body {
 }
 .dot { opacity: 0.4; }
 
+.share-btn {
+  margin-left: auto;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.share-btn:hover { border-color: var(--accent); color: var(--accent); }
+.share-btn:active, .share-btn.copied { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
+
 /* Layout */
 .layout {
   display: flex;
