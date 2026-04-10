@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { ParallelCoords } from './ParallelCoords.jsx';
 import { BoxPlots } from './BoxPlots.jsx';
+import { ValueScore } from './ValueScore.jsx';
 
 const CLARITY_ORDER = ['FL', 'IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1', 'I2', 'I3'];
 const COLOR_ORDER   = ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'];
@@ -15,6 +16,7 @@ const METRICS = [
   { key: 'clarity', label: 'Price vs Clarity', xLabel: 'Clarity Grade' },
   { key: 'grouped', label: 'All Attributes',   xLabel: ''              },
   { key: 'value',   label: '$/ct Analysis',    xLabel: ''              },
+  { key: 'score',   label: 'Value Score',      xLabel: ''              },
 ];
 
 function toX(row, metric) {
@@ -77,7 +79,7 @@ function CustomTooltip({ active, payload }) {
 }
 
 export function Charts({ rows, selected, onSelect }) {
-  const [metric, setMetric] = useState('grouped');
+  const [metric, setMetric] = useState('score');
 
   // ── All hooks must be called unconditionally ──────────────────────────────
   const DotShape = useCallback(
@@ -134,6 +136,15 @@ export function Charts({ rows, selected, onSelect }) {
       <div className="charts-panel">
         {tabs}
         <BoxPlots rows={rows} />
+      </div>
+    );
+  }
+
+  if (metric === 'score') {
+    return (
+      <div className="charts-panel">
+        {tabs}
+        <ValueScore rows={rows} selected={selected} onSelect={onSelect} />
       </div>
     );
   }
