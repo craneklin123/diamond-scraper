@@ -76,6 +76,15 @@ export function ValueScore({ rows, selected, onSelect }) {
       .filter(Boolean);
   }, [rows, weights, caratRange]);
 
+  const priceDomain = useMemo(() => {
+    if (!chartData.length) return ['auto', 'auto'];
+    const prices = chartData.map(d => d.y);
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const pad = (max - min) * 0.05;
+    return [min - pad, max + pad];
+  }, [chartData]);
+
   const labData   = chartData.filter(d => d.row.Origin === 'Lab Grown');
   const minedData = chartData.filter(d => d.row.Origin !== 'Lab Grown');
 
@@ -162,6 +171,7 @@ export function ValueScore({ rows, selected, onSelect }) {
             dataKey="y"
             name="Price"
             reversed
+            domain={priceDomain}
             tickFormatter={priceLabel}
             tick={{ fontSize: 12, fill: '#6b7280' }}
             width={56}
