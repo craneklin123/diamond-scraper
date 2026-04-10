@@ -122,14 +122,14 @@ export function ValueScore({ rows, selected, onSelect }) {
         <div className="score-weights">
           {ATTRS.map(({ key, label }) => (
             <div key={key} className="score-weight-row">
-              <span className="score-weight-label">{label}</span>
+              <label className="score-weight-label" htmlFor={`w-${key}`}>{label}</label>
               <input
-                type="range" min="0" max="10" step="1"
+                id={`w-${key}`}
+                type="number" min="0" max="100" step="1"
                 value={draft[key]}
                 onChange={e => setW(key, Number(e.target.value))}
-                className="slider"
+                className="score-weight-input"
               />
-              <span className="score-weight-val">{draft[key]}</span>
             </div>
           ))}
         </div>
