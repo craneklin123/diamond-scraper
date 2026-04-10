@@ -329,7 +329,7 @@ function AboutBanner() {
         <div className="about-details">
           <p><strong>What is this?</strong> A tool to browse and compare diamonds from multiple vendors side-by-side. Data is scraped periodically so prices may vary — always verify on the vendor's site before purchasing.</p>
           <p><strong>Vendors:</strong> Brilliant Earth, James Allen, Clean Origin. Lab-grown diamonds are significantly cheaper than mined for the same specs.</p>
-          <p><strong>Charts:</strong> The "All Attributes" view lets you drag axes to filter by multiple dimensions at once. The scatter charts show price vs. a single attribute — click any dot to highlight that diamond in the table below.</p>
+          <p><strong>Charts:</strong> The "All Attributes" view lets you drag axes to filter by multiple dimensions at once. The scatter charts show price vs. a single attribute — click any dot to highlight that diamond in the table below. The "Value Score" chart lets you assign weights to carat, cut, color, and clarity to score each diamond, then plots that score against price so you can see which diamonds offer the best value for what you care about most.</p>
           <p><strong>Tips:</strong> Sort by Price ↑ to find the best deals. Filter by shape first (Round and Oval tend to have the most inventory). Lab-grown diamonds offer the best value per carat.</p>
         </div>
       )}
