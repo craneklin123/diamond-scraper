@@ -76,12 +76,6 @@ export function ValueScore({ rows, selected, onSelect }) {
       .filter(Boolean);
   }, [rows, weights, caratRange]);
 
-  const priceRange = useMemo(() => {
-    if (!chartData.length) return [0, 10000];
-    const prices = chartData.map(d => d.y);
-    return [Math.max(...prices) * 1.05, 0]; // inverted: max at top = bottom of axis
-  }, [chartData]);
-
   const labData   = chartData.filter(d => d.row.Origin === 'Lab Grown');
   const minedData = chartData.filter(d => d.row.Origin !== 'Lab Grown');
 
@@ -167,7 +161,7 @@ export function ValueScore({ rows, selected, onSelect }) {
           <YAxis
             dataKey="y"
             name="Price"
-            domain={priceRange}
+            reversed
             tickFormatter={priceLabel}
             tick={{ fontSize: 12, fill: '#6b7280' }}
             width={56}
