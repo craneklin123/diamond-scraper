@@ -2,7 +2,10 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Papa from 'papaparse';
 import { Charts } from './Charts.jsx';
 
-const VENDOR_FILES = ['brilliantearth', 'jamesallen', 'cleanorigin'];
+const VENDOR_FILES = {
+  diamonds:    ['brilliantearth', 'jamesallen', 'cleanorigin'],
+  moissanite:  ['brilliantearth_moi', 'cleanorigin_moi', 'charlesandcolvard'],
+};
 
 const SORTABLE_COLS = [
   { key: 'Price', label: 'Price' },
@@ -97,6 +100,10 @@ function toggle(arr, val) {
 }
 
 export default function App() {
+  const [mode, setMode] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get('mode') === 'moissanite' ? 'moissanite' : 'diamonds';
+  });
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadedVendors, setLoadedVendors] = useState([]);
@@ -117,6 +124,7 @@ export default function App() {
   // Sync filters → URL
   useEffect(() => {
     const p = new URLSearchParams();
+    if (mode !== 'diamonds') p.set('mode', mode);
     if (shapes.length)  p.set('shapes',   shapes.map(encodeURIComponent).join(','));
     if (origins.length) p.set('origins',  origins.map(encodeURIComponent).join(','));
     if (vendors.length) p.set('vendors',  vendors.map(encodeURIComponent).join(','));
@@ -129,7 +137,7 @@ export default function App() {
     p.set('wClarity', weights.clarity);
     const qs = p.toString();
     history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
-  }, [shapes, origins, vendors, labs, priceMax, caratMin, weights]);
+  }, [mode, shapes, origins, vendors, labs, priceMax, caratMin, weights]);
 
   function shareFilters() {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -140,8 +148,10 @@ export default function App() {
 
   useEffect(() => {
     const loaded = [];
+    setRows([]);
+    setLoading(true);
     Promise.all(
-      VENDOR_FILES.map(v =>
+      VENDOR_FILES[mode].map(v =>
         fetch(`/data/${v}.csv`)
           .then(r => r.ok ? r.text() : null)
           .then(text => {
@@ -160,7 +170,7 @@ export default function App() {
       setLoadedVendors(loaded);
       setLoading(false);
     });
-  }, []);
+  }, [mode]);
 
   const filtered = useMemo(() => {
     let out = rows;
@@ -206,7 +216,11 @@ export default function App() {
           <button className="filter-toggle" onClick={() => setSidebarOpen(o => !o)} aria-label="Toggle filters">
             ☰ Filters
           </button>
-          <h1>Diamond Finder <span style={{fontSize:11,fontWeight:400,color:'#9ca3af'}}>v2</span></h1>
+          <h1>Diamond Finder</h1>
+          <div className="mode-tabs">
+            <button className={`mode-tab${mode === 'diamonds' ? ' active' : ''}`} onClick={() => setMode('diamonds')}>Diamonds</button>
+            <button className={`mode-tab${mode === 'moissanite' ? ' active' : ''}`} onClick={() => setMode('moissanite')}>Moissanite</button>
+          </div>
           <div className="header-meta">
             <span>{filtered.length.toLocaleString()} results</span>
             <span className="dot">·</span>
