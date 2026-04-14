@@ -385,7 +385,8 @@ function AboutBanner() {
   return (
     <div className="about-banner">
       <div className="about-summary">
-        <strong>Diamond Finder</strong> — compare lab-grown and natural diamonds across vendors.
+        <strong>Diamond &amp; Moissanite Finder</strong> — compare lab-grown and natural diamonds (or moissanite) across vendors.
+        Use the <strong>Diamonds / Moissanite</strong> toggle at the top to switch gemstone types.
         Use the filters on the left to narrow by shape, price, carat, and more.
         Click any chart point or table row to see details and a link to buy.
         {' '}
@@ -395,11 +396,12 @@ function AboutBanner() {
       </div>
       {open && (
         <div className="about-details">
-          <p><strong>What is this?</strong> A tool to browse and compare diamonds from multiple vendors side-by-side. Data is scraped periodically so prices may vary — always verify on the vendor's site before purchasing.</p>
-          <p><strong>Vendors:</strong> Brilliant Earth, James Allen, Clean Origin. Lab-grown diamonds are significantly cheaper than mined for the same specs.</p>
-          <p><strong>The 4 C's:</strong> Diamonds are graded on four attributes. <strong>Carat</strong> is the weight of the diamond — bigger is more expensive. <strong>Cut</strong> determines how well the diamond reflects light; Ideal and Excellent are the best grades. <strong>Color</strong> is graded D (colorless, best) through M (noticeable yellow tint). <strong>Clarity</strong> measures internal flaws, from FL (flawless) down to I3 (heavily included) — VS1/VS2 and SI1 offer good value since flaws are invisible to the naked eye.</p>
-          <p><strong>Charts:</strong> The "All Attributes" view lets you drag axes to filter by multiple dimensions at once. The scatter charts show price vs. a single attribute — click any dot to highlight that diamond in the table below. The "Value Score" chart lets you assign a weight to each of the 4 C's — a higher number means that attribute matters more to you. Diamonds are scored based on those weights and plotted against price, so the top-right of the chart shows the highest-scoring diamonds at the lowest prices.</p>
-          <p><strong>Tips:</strong> Sort by Price ↑ to find the best deals. Filter by shape first (Round and Oval tend to have the most inventory). Lab-grown diamonds offer the best value per carat.</p>
+          <p><strong>What is this?</strong> A tool to browse and compare diamonds and moissanite from multiple vendors side-by-side. Data is scraped periodically so prices may vary — always verify on the vendor's site before purchasing.</p>
+          <p><strong>Diamond vendors:</strong> Brilliant Earth, James Allen, Clean Origin. Lab-grown diamonds are significantly cheaper than mined for the same specs.</p>
+          <p><strong>Moissanite vendors:</strong> Brilliant Earth, Charles &amp; Colvard. Moissanite is a lab-grown gemstone that looks nearly identical to a diamond but costs a fraction of the price. Switch to Moissanite mode using the toggle in the header.</p>
+          <p><strong>The 4 C's:</strong> Diamonds and moissanite are graded on four attributes. <strong>Carat</strong> is the weight of the stone — bigger is more expensive. <strong>Cut</strong> determines how well the stone reflects light; Ideal and Excellent are the best grades. <strong>Color</strong> is graded D (colorless, best) through M (noticeable yellow tint). <strong>Clarity</strong> measures internal flaws, from FL (flawless) down to I3 (heavily included) — VS1/VS2 and SI1 offer good value since flaws are invisible to the naked eye.</p>
+          <p><strong>Charts:</strong> The "All Attributes" view lets you drag axes to filter by multiple dimensions at once. The scatter charts show price vs. a single attribute — click any dot to highlight that stone in the table below. The "Value Score" chart lets you assign a weight to each of the 4 C's — a higher number means that attribute matters more to you. Stones are scored based on those weights and plotted against price, so the top-right of the chart shows the highest-scoring stones at the lowest prices.</p>
+          <p><strong>Tips:</strong> Sort by Price ↑ to find the best deals. Filter by shape first (Round and Oval tend to have the most inventory). Lab-grown stones offer the best value per carat.</p>
         </div>
       )}
     </div>
