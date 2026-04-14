@@ -319,7 +319,7 @@ export default function App() {
         </aside>
 
         <main className="results">
-          <AboutBanner />
+          <AboutBanner mode={mode} />
           <Charts rows={filtered} selected={selected} onSelect={handleSelect} weights={weights} onWeightsChange={setWeights} mode={mode} />
 
           {selected && (
@@ -400,8 +400,17 @@ export default function App() {
   );
 }
 
-function AboutBanner() {
+function AboutBanner({ mode }) {
   const [open, setOpen] = useState(false);
+  const [sources, setSources] = useState(null);
+
+  useEffect(() => {
+    fetch('/data/sources.json').then(r => r.json()).then(setSources).catch(() => {});
+  }, []);
+
+  const modeKey = mode === 'moissanite' ? 'moissanite' : 'diamonds';
+  const scrapeList = sources?.[modeKey] || [];
+
   return (
     <div className="about-banner">
       <div className="about-summary">
@@ -413,6 +422,11 @@ function AboutBanner() {
         <button className="about-toggle" onClick={() => setOpen(o => !o)}>
           {open ? 'Hide info' : 'How it works'}
         </button>
+        {scrapeList.length > 0 && (
+          <span className="scrape-dates">
+            {' '}Data last updated: {scrapeList.map(s => `${s.vendor} ${s.scraped}`).join(' · ')}
+          </span>
+        )}
       </div>
       {open && (
         <div className="about-details">
