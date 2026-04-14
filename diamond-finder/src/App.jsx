@@ -65,6 +65,8 @@ function parseUrlFilters() {
     origins:  getArr('origins'),
     vendors:  getArr('vendors'),
     labs:     getArr('labs'),
+    colors:   getArr('colors'),
+    cuts:     getArr('cuts'),
     priceMax: getNum('priceMax'),
     caratMin: getNum('caratMin'),
     weights: (p.has('wCarat') || p.has('wCut') || p.has('wColor') || p.has('wClarity')) ? {
@@ -112,6 +114,8 @@ export default function App() {
   const [origins, setOrigins] = useLocalStorage('df_origins', [], URL_INIT.origins);
   const [vendors, setVendors] = useLocalStorage('df_vendors', [], URL_INIT.vendors);
   const [labs, setLabs] = useLocalStorage('df_labs', [], URL_INIT.labs);
+  const [colors, setColors] = useLocalStorage('df_colors', [], URL_INIT.colors);
+  const [cuts, setCuts] = useLocalStorage('df_cuts', [], URL_INIT.cuts);
   const [priceMax, setPriceMax] = useLocalStorage('df_priceMax', 3000, URL_INIT.priceMax);
   const [caratMin, setCaratMin] = useLocalStorage('df_caratMin', 0, URL_INIT.caratMin);
   const [sort, setSort] = useState({ col: 'Price', dir: 'asc' });
@@ -129,6 +133,8 @@ export default function App() {
     if (origins.length) p.set('origins',  origins.map(encodeURIComponent).join(','));
     if (vendors.length) p.set('vendors',  vendors.map(encodeURIComponent).join(','));
     if (labs.length)    p.set('labs',     labs.map(encodeURIComponent).join(','));
+    if (colors.length)  p.set('colors',   colors.map(encodeURIComponent).join(','));
+    if (cuts.length)    p.set('cuts',     cuts.map(encodeURIComponent).join(','));
     if (priceMax !== 3000) p.set('priceMax', priceMax);
     if (caratMin !== 0)    p.set('caratMin', caratMin);
     p.set('wCarat',   weights.carat);
@@ -137,7 +143,7 @@ export default function App() {
     p.set('wClarity', weights.clarity);
     const qs = p.toString();
     history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
-  }, [mode, shapes, origins, vendors, labs, priceMax, caratMin, weights]);
+  }, [mode, shapes, origins, vendors, labs, colors, cuts, priceMax, caratMin, weights]);
 
   function shareFilters() {
     navigator.clipboard.writeText(window.location.href).then(() => {
@@ -178,10 +184,12 @@ export default function App() {
     if (origins.length) out = out.filter(r => origins.includes(r.Origin));
     if (vendors.length) out = out.filter(r => vendors.includes(r.Vendor));
     if (labs.length) out = out.filter(r => labs.includes(r['Grading Lab']));
+    if (colors.length) out = out.filter(r => colors.includes(r['Color Grade']));
+    if (cuts.length) out = out.filter(r => cuts.includes(r['Cut Grade']));
     out = out.filter(r => parseFloat(r.Price) <= priceMax);
     if (caratMin > 0) out = out.filter(r => parseFloat(r['Carat Weight']) >= caratMin);
     return sortRows(out, sort.col, sort.dir);
-  }, [rows, shapes, origins, vendors, labs, priceMax, caratMin, sort]);
+  }, [rows, shapes, origins, vendors, labs, colors, cuts, priceMax, caratMin, sort]);
 
   const sortBy = col => setSort(s =>
     s.col === col ? { col, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' }
@@ -199,6 +207,8 @@ export default function App() {
   const dataOrigins = useMemo(() => uniq(rows, 'Origin'), [rows]);
   const dataVendors = useMemo(() => uniq(rows, 'Vendor'), [rows]);
   const dataLabs = useMemo(() => uniq(rows, 'Grading Lab'), [rows]);
+  const dataColors = useMemo(() => [...new Set(rows.map(r => r['Color Grade']).filter(Boolean))].sort((a, b) => COLOR_ORDER.indexOf(a) - COLOR_ORDER.indexOf(b)), [rows]);
+  const dataCuts = useMemo(() => [...new Set(rows.map(r => r['Cut Grade']).filter(Boolean))].sort((a, b) => CUT_ORDER.indexOf(a) - CUT_ORDER.indexOf(b)), [rows]);
 
   if (loading) {
     return (
@@ -289,10 +299,20 @@ export default function App() {
             onToggle={v => setLabs(toggle(labs, v))}
             onClear={() => setLabs([])}
           />
+          <FilterGroup
+            label="Color" options={dataColors} selected={colors}
+            onToggle={v => setColors(toggle(colors, v))}
+            onClear={() => setColors([])}
+          />
+          <FilterGroup
+            label="Cut" options={dataCuts} selected={cuts}
+            onToggle={v => setCuts(toggle(cuts, v))}
+            onClear={() => setCuts([])}
+          />
 
           <button
             className="reset-btn"
-            onClick={() => { setShapes([]); setOrigins([]); setVendors([]); setLabs([]); setPriceMax(3000); setCaratMin(0); }}
+            onClick={() => { setShapes([]); setOrigins([]); setVendors([]); setLabs([]); setColors([]); setCuts([]); setPriceMax(3000); setCaratMin(0); }}
           >
             Reset all filters
           </button>
