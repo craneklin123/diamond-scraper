@@ -78,8 +78,8 @@ function CustomTooltip({ active, payload }) {
   );
 }
 
-export function Charts({ rows, selected, onSelect, weights, onWeightsChange }) {
-  const [metric, setMetric] = useState('score');
+export function Charts({ rows, selected, onSelect, weights, onWeightsChange, mode }) {
+  const [metric, setMetric] = useState(mode === 'moissanite' ? 'carat' : 'score');
 
   // ── All hooks must be called unconditionally ──────────────────────────────
   const DotShape = useCallback(
@@ -102,9 +102,13 @@ export function Charts({ rows, selected, onSelect, weights, onWeightsChange }) {
   const domain = isCategorical ? [-0.5, catOrder.length - 0.5] : ['auto', 'auto'];
   // ─────────────────────────────────────────────────────────────────────────
 
+  const visibleMetrics = mode === 'moissanite'
+    ? METRICS.filter(m => m.key === 'carat')
+    : METRICS;
+
   const tabs = (
     <div className="chart-tabs">
-      {METRICS.map(m => (
+      {visibleMetrics.map(m => (
         <button
           key={m.key}
           className={`chart-tab ${metric === m.key ? 'active' : ''}`}

@@ -300,7 +300,7 @@ export default function App() {
 
         <main className="results">
           <AboutBanner />
-          <Charts rows={filtered} selected={selected} onSelect={handleSelect} weights={weights} onWeightsChange={setWeights} />
+          <Charts rows={filtered} selected={selected} onSelect={handleSelect} weights={weights} onWeightsChange={setWeights} mode={mode} />
 
           {selected && (
             <div className="selected-card">
