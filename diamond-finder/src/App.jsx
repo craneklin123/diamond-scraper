@@ -3,7 +3,7 @@ import Papa from 'papaparse';
 import { Charts } from './Charts.jsx';
 
 const VENDOR_FILES = {
-  diamonds:    ['brilliantearth', 'jamesallen', 'cleanorigin'],
+  diamonds:    ['brilliantearth', 'jamesallen', 'cleanorigin', 'bluenile'],
   moissanite:  ['brilliantearth_moi', 'charlesandcolvard'],
 };
 
