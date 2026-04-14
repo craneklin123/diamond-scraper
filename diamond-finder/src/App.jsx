@@ -4,7 +4,7 @@ import { Charts } from './Charts.jsx';
 
 const VENDOR_FILES = {
   diamonds:    ['brilliantearth', 'jamesallen', 'cleanorigin'],
-  moissanite:  ['cleanorigin_moi', 'charlesandcolvard'],
+  moissanite:  ['charlesandcolvard'],
 };
 
 const SORTABLE_COLS = [
