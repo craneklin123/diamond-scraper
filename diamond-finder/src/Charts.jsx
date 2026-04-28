@@ -3,7 +3,9 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { GroupedScatter } from './GroupedScatter.jsx';
+import { ParallelCoords } from './ParallelCoords.jsx';
+import { BoxPlots } from './BoxPlots.jsx';
+import { ValueScore } from './ValueScore.jsx';
 
 const CLARITY_ORDER = ['FL', 'IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1', 'I2', 'I3'];
 const COLOR_ORDER   = ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'];
@@ -12,7 +14,9 @@ const METRICS = [
   { key: 'carat',   label: 'Price vs Carat',  xLabel: 'Carat Weight'  },
   { key: 'color',   label: 'Price vs Color',   xLabel: 'Color Grade'   },
   { key: 'clarity', label: 'Price vs Clarity', xLabel: 'Clarity Grade' },
-  { key: 'grouped', label: 'Color × Clarity',  xLabel: ''              },
+  { key: 'grouped', label: 'All Attributes',   xLabel: ''              },
+  { key: 'value',   label: '$/ct Analysis',    xLabel: ''              },
+  { key: 'score',   label: 'Value Score',      xLabel: ''              },
 ];
 
 function toX(row, metric) {
@@ -74,8 +78,8 @@ function CustomTooltip({ active, payload }) {
   );
 }
 
-export function Charts({ rows, selected, onSelect }) {
-  const [metric, setMetric] = useState('carat');
+export function Charts({ rows, selected, onSelect, weights, onWeightsChange, mode }) {
+  const [metric, setMetric] = useState(mode === 'moissanite' ? 'carat' : 'score');
 
   // ── All hooks must be called unconditionally ──────────────────────────────
   const DotShape = useCallback(
@@ -83,7 +87,7 @@ export function Charts({ rows, selected, onSelect }) {
     [selected, onSelect]
   );
 
-  const chartData = metric !== 'grouped'
+  const chartData = metric !== 'grouped' && metric !== 'value'
     ? rows
         .map(r => ({ x: toX(r, metric), y: parseFloat(r.Price), row: r }))
         .filter(d => d.x != null && d.x !== -1 && !isNaN(d.x) && !isNaN(d.y))
@@ -98,9 +102,13 @@ export function Charts({ rows, selected, onSelect }) {
   const domain = isCategorical ? [-0.5, catOrder.length - 0.5] : ['auto', 'auto'];
   // ─────────────────────────────────────────────────────────────────────────
 
+  const visibleMetrics = mode === 'moissanite'
+    ? METRICS.filter(m => m.key === 'carat')
+    : METRICS;
+
   const tabs = (
     <div className="chart-tabs">
-      {METRICS.map(m => (
+      {visibleMetrics.map(m => (
         <button
           key={m.key}
           className={`chart-tab ${metric === m.key ? 'active' : ''}`}
@@ -109,7 +117,7 @@ export function Charts({ rows, selected, onSelect }) {
           {m.label}
         </button>
       ))}
-      {metric !== 'grouped' && (
+      {metric !== 'grouped' && metric !== 'value' && (
         <div className="chart-legend">
           <span className="legend-dot lab" /> Lab Grown
           <span className="legend-dot mined" /> Mined
@@ -122,7 +130,25 @@ export function Charts({ rows, selected, onSelect }) {
     return (
       <div className="charts-panel">
         {tabs}
-        <GroupedScatter rows={rows} selected={selected} onSelect={onSelect} />
+        <ParallelCoords rows={rows} selected={selected} onSelect={onSelect} />
+      </div>
+    );
+  }
+
+  if (metric === 'value') {
+    return (
+      <div className="charts-panel">
+        {tabs}
+        <BoxPlots rows={rows} />
+      </div>
+    );
+  }
+
+  if (metric === 'score') {
+    return (
+      <div className="charts-panel">
+        {tabs}
+        <ValueScore rows={rows} selected={selected} onSelect={onSelect} weights={weights} onWeightsChange={onWeightsChange} />
       </div>
     );
   }

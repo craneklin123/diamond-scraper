@@ -16,7 +16,9 @@
  *   (in diamond_scraper/diamond_scraper/ alongside the Python spiders' output)
  */
 
-const puppeteer = require('puppeteer');
+const puppeteerVanilla = require('puppeteer');
+const puppeteerExtra  = (() => { try { const p = require('puppeteer-extra'); const s = require('puppeteer-extra-plugin-stealth'); p.use(s()); return p; } catch(_) { return null; } })();
+const puppeteer = puppeteerExtra || puppeteerVanilla;
 const fs = require('fs');
 const path = require('path');
 
@@ -80,6 +82,20 @@ function looksLikeDiamonds(obj) {
 
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
+}
+
+/** Random delay between min and max ms — defeats fixed-interval bot detection */
+function jitter(min = 600, max = 1800) {
+  return sleep(min + Math.random() * (max - min));
+}
+
+/** Longer pause every N pages to mimic a user pausing to look at results */
+async function maybeLongPause(pageNum, every = 25) {
+  if (pageNum % every === 0) {
+    const pause = 5000 + Math.random() * 5000; // 5–10 s
+    console.log(`  [pause] taking a ${(pause / 1000).toFixed(1)}s break after page ${pageNum}...`);
+    await sleep(pause);
+  }
 }
 
 async function withPage(browser, fn) {
@@ -158,109 +174,275 @@ function normalizeShape(s) {
 
 // ── James Allen ───────────────────────────────────────────────────────────────
 
+function parseJAProduct(p, fallbackShape) {
+  const id = p.productID || p.sku || p.id || p.itemId;
+  if (!id) return null;
+  // DOM-extracted items have price/carat/etc already parsed as strings
+  if (p.href) {
+    return {
+      Vendor: 'James Allen',
+      'Vendor SKU': String(id),
+      Link: p.href,
+      Price: p.price,
+      Shape: normalizeShape(p.shape) || fallbackShape,
+      'Carat Weight': p.carat,
+      'Color Grade': p.color || '',
+      'Cut Grade': p.cut || null,
+      'Clarity Grade': p.clarity || '',
+      'Grading Lab': p.lab || null,
+      Origin: p._isLab ? 'Lab Grown' : (p.lab === 'IGI' ? 'Lab Grown' : 'Mined'),
+    };
+  }
+  const lab = String(p.lab || p.gradingLab || p.certLab || '').toUpperCase() || null;
+  const certId = (() => {
+    const raw = String(p.cert || p.certNumber || p.certificateNumber || p.reportNumber || '');
+    const m = raw.match(/(\d{6,})/);
+    return m ? m[1] : null;
+  })();
+  let link = p.url || p.pdpUrl || p.productUrl || '';
+  if (link && !link.startsWith('http')) link = 'https://www.jamesallen.com' + link;
+  const meas = p.measurements || p.dims || {};
+  const cap = s => s ? String(s).replace(/\b\w/g, c => c.toUpperCase()) : null;
+  return {
+    Vendor: 'James Allen',
+    'Vendor SKU': String(id),
+    Link: link || null,
+    Price: p.price || p.usdPrice || p.salePrice || p.retailPrice,
+    Shape: normalizeShape(p.shape || p.shapeName) || fallbackShape,
+    'Carat Weight': p.carat || p.caratWeight,
+    'Color Grade': p.color || p.colorGrade || '',
+    'Cut Grade': cap(p.cut || p.cutGrade),
+    'Clarity Grade': p.clarity || p.clarityGrade || '',
+    Fluorescence: cap(p.flour || p.fluorescence),
+    'Polish Grade': cap(p.polish),
+    'Symmetry Grade': cap(p.symmetry),
+    'Depth (%)': p.depth || p.totalDepth,
+    Table: p.tableSize || p.table,
+    Girdle: p.girdle,
+    Culet: p.culet,
+    Width: meas.length || meas.width || p.measurement1,
+    Height: meas.width || p.measurement2,
+    Depth: meas.depth || p.measurement3,
+    'Grading Lab': lab,
+    'Grading Certificate ID': certId,
+    'Grading Link': certId && lab === 'IGI'
+      ? `https://www.igi.org/reports/verify-your-report?r=${certId}`
+      : certId && lab === 'GIA'
+      ? `https://www.gia.edu/report-check?reportno=${certId}`
+      : null,
+    Origin: (p.isLabDiamond || p.labGrown || p.lab_grown) ? 'Lab Grown' : 'Mined',
+    '360 Video Link': p.galleryUrl || p.stage || p.videoUrl || null,
+  };
+}
+
+function extractJAProducts(json) {
+  // Try every likely key that might hold an array of products
+  if (Array.isArray(json)) return json;
+  const candidates = [
+    json.products, json.items, json.diamonds, json.results,
+    json.data?.products, json.data?.items, json.data?.diamonds,
+    json.payload?.products, json.payload?.items,
+    json.response?.products,
+  ];
+  for (const c of candidates) {
+    if (Array.isArray(c) && c.length) return c;
+  }
+  // Walk one more level if it's a plain object
+  for (const val of Object.values(json)) {
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      for (const v2 of Object.values(val)) {
+        if (Array.isArray(v2) && v2.length && looksLikeDiamonds(v2.slice(0, 2))) return v2;
+      }
+    }
+  }
+  return null;
+}
+
 async function scrapeJamesAllen(browser) {
   console.log('\n[James Allen] Starting...');
-  const collected = new Map(); // productID → item, dedup across pages
+  const collected = new Map();
 
-  const SHAPES = [
-    { slug: 'emerald-cut', shape: 'Emerald' },
-    { slug: 'marquise-cut', shape: 'Marquise' },
+  const BASE = 'https://www.jamesallen.com/loose-diamonds/all-diamonds/lab-grown-diamond-search/'
+             + '?Shape=all-diamonds&Color=all-colors'
+             + '&Clarity=I1,SI2,SI1,VS2,VS1,VVS2,VVS1,IF,FL'
+             + '&Cut=Good,Very+Good,Ideal,TrueHearts&CaratFrom=0.05';
+  const BASE_MINED = 'https://www.jamesallen.com/loose-diamonds/all-diamonds/'
+             + '?Shape=all-diamonds&Color=all-colors'
+             + '&Clarity=I1,SI2,SI1,VS2,VS1,VVS2,VVS1,IF,FL'
+             + '&Cut=Good,Very+Good,Ideal,TrueHearts&CaratFrom=0.05';
+  const PRICE_BANDS = [500, 1000, 2000, 3500, 6000, 10000];
+  const SEARCH_PAGES = [
+    // Lab grown across price bands
+    ...PRICE_BANDS.map((max, i) =>
+      `${BASE}&PriceFrom=${i === 0 ? 0 : PRICE_BANDS[i-1]}&PriceTo=${max}`
+    ),
+    // Natural/mined across price bands
+    ...PRICE_BANDS.map((max, i) =>
+      `${BASE_MINED}&PriceFrom=${i === 0 ? 0 : PRICE_BANDS[i-1]}&PriceTo=${max}`
+    ),
   ];
 
-  for (const { slug, shape } of SHAPES) {
-    console.log(`  [JA] Scraping ${shape} cut...`);
+  await withPage(browser, async (page) => {
+    const intercepted = [];
 
-    await withPage(browser, async (page) => {
-      // Intercept JSON responses and look for diamond data
-      page.on('response', async (response) => {
-        const url = response.url();
-        const contentType = response.headers()['content-type'] || '';
-        if (!contentType.includes('json')) return;
+    page.on('response', async (response) => {
+      const url = response.url();
+      const ct = response.headers()['content-type'] || '';
+      if (!ct.includes('json')) return;
+      if (!url.includes('jamesallen.com')) return;
+      try {
+        const json = await response.json();
 
-        try {
-          const json = await response.json();
-          // Check if this looks like a products/diamonds array
-          const products = Array.isArray(json)
-            ? json
-            : json.products || json.items || json.diamonds || json.results || null;
+        // Target the known diamond API endpoint directly
+        if (url.includes('ja-product-api/diamond')) {
+          const d = json.data;
+          if (!d) return;
 
-          if (!products || !Array.isArray(products) || !products.length) return;
-          if (!looksLikeDiamonds(products.slice(0, 2))) return;
-
-          console.log(`  [JA] Intercepted diamond data from: ${url} (${products.length} items)`);
-
-          for (const p of products) {
-            const id = p.productID || p.sku || p.id;
-            if (!id || collected.has(String(id))) continue;
-
-            const meas = p.measurements || {};
-            const lab = String(p.lab || '').toUpperCase() || null;
-            const certId = (() => {
-              const raw = String(p.cert || p.certNumber || '');
-              const m = raw.match(/(\d{7,})/);
-              return m ? m[1] : null;
-            })();
-
-            let url2 = p.url || '';
-            if (url2 && !url2.startsWith('http')) url2 = 'https://www.jamesallen.com' + url2;
-
-            collected.set(String(id), {
-              Vendor: 'James Allen',
-              'Vendor SKU': p.sku || '',
-              Link: url2,
-              Price: p.price || p.usdPrice || p.salePrice,
-              Shape: normalizeShape(p.shape) || shape,
-              'Carat Weight': p.carat,
-              'Color Grade': p.color || '',
-              'Cut Grade': p.cut ? String(p.cut).replace(/\b\w/g, c => c.toUpperCase()) : null,
-              'Clarity Grade': p.clarity || '',
-              Fluorescence: p.flour ? String(p.flour).replace(/\b\w/g, c => c.toUpperCase()) : null,
-              'Polish Grade': p.polish ? String(p.polish).replace(/\b\w/g, c => c.toUpperCase()) : null,
-              'Symmetry Grade': p.symmetry ? String(p.symmetry).replace(/\b\w/g, c => c.toUpperCase()) : null,
-              'Depth (%)': p.depth,
-              Table: p.tableSize,
-              Girdle: p.girdle,
-              Culet: p.culet,
-              Width: meas.length || meas.width,
-              Height: meas.width,
-              Depth: meas.depth,
-              'Grading Lab': lab,
-              'Grading Certificate ID': certId,
-              'Grading Link': certId && lab === 'IGI'
-                ? `https://www.igi.org/reports/verify-your-report?r=${certId}`
-                : certId && lab === 'GIA'
-                ? `https://www.gia.edu/report-check?reportno=${certId}`
-                : null,
-              Origin: p.isLabDiamond ? 'Lab Grown' : 'Mined',
-              '360 Video Link': p.galleryUrl || p.stage,
-            });
+          // searchByIDs is an object keyed by diamond ID: { "123": { price, carat, ... }, ... }
+          const byId = d.searchByIDs;
+          if (byId && typeof byId === 'object' && !Array.isArray(byId)) {
+            const vals = Object.values(byId);
+            console.log(`  [JA] Diamond API: ${vals.length} items. Sample keys: ${vals[0] ? Object.keys(vals[0]).join(',') : 'none'}`);
+            if (vals[0]) console.log(`  [JA] Sample item: ${JSON.stringify(vals[0]).slice(0, 300)}`);
+            intercepted.push(...vals);
+          } else if (Array.isArray(byId)) {
+            console.log(`  [JA] searchByIDs is array[${byId.length}]`);
+            intercepted.push(...byId);
+          } else if (Array.isArray(d)) {
+            intercepted.push(...d);
+          } else {
+            console.log(`  [JA] Unexpected data shape: ${JSON.stringify(d).slice(0, 200)}`);
           }
-        } catch (_) {
-          // Not parseable as JSON or not diamond data
+          return;
         }
-      });
 
-      // Navigate and wait for content to load
-      const url = `https://www.jamesallen.com/loose-diamonds/${slug}/?priceMax=1500`;
-      await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-      await waitForChallenge(page, 'James Allen');
-
-      // Scroll down to trigger lazy loading / pagination API calls
-      for (let i = 1; i <= 4; i++) {
-        await page.evaluate(n => window.scrollTo(0, document.body.scrollHeight * n / 4), i);
-        await sleep(1500);
-      }
-      await sleep(2000);
+        // General fallback for other JA endpoints
+        const products = extractJAProducts(json);
+        if (!products || !looksLikeDiamonds(products.slice(0, 2))) return;
+        console.log(`  [JA] Other hit: ${url} (${products.length} items)`);
+        intercepted.push(...products);
+      } catch (_) {}
     });
 
-    console.log(`  [JA] ${shape}: ${collected.size} items collected so far`);
-    await sleep(2000);
-  }
+    // Visit homepage first to establish session
+    console.log('  [JA] Loading homepage...');
+    await page.goto('https://www.jamesallen.com/', { waitUntil: 'networkidle2', timeout: 60000 });
+    await waitForChallenge(page, 'James Allen');
+    await sleep(3000);
+
+    const homeLinks = await page.evaluate(() =>
+      [...document.querySelectorAll('a[href]')].map(a => a.href)
+        .filter(h => h.includes('jamesallen.com')).slice(0, 5)
+    ).catch(() => []);
+    console.log(`  [JA] Homepage internal links: ${homeLinks.join(', ')}`);
+
+    for (const pageUrl of SEARCH_PAGES) {
+      console.log(`  [JA] Navigating to: ${pageUrl}`);
+      // Use JS navigation to inherit session/cookies rather than a fresh goto
+      await page.evaluate(url => { location.href = url; }, pageUrl);
+      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {});
+      await waitForChallenge(page, 'James Allen');
+      await sleep(4000);
+
+      // Wait for product cards to appear in the DOM
+      await page.waitForSelector(
+        '[class*="product"], [class*="diamond"], [class*="item"], [data-sku], [data-product]',
+        { timeout: 15000 }
+      ).catch(() => console.log('  [JA] No product selector found yet, scrolling anyway...'));
+      await sleep(2000);
+
+      // Slow scroll to trigger lazy-loaded API calls
+      for (let i = 1; i <= 8; i++) {
+        await page.evaluate(n => window.scrollTo(0, document.body.scrollHeight * n / 8), i);
+        await sleep(2000);
+      }
+      // Scroll back to top to trigger any load-on-visible logic
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await sleep(3000);
+
+      // Check __NEXT_DATA__
+      const nextData = await page.evaluate(() => {
+        const el = document.getElementById('__NEXT_DATA__');
+        if (!el) return null;
+        try { return JSON.parse(el.textContent); } catch (_) { return null; }
+      }).catch(() => null);
+
+      if (nextData) {
+        const walk = (obj, depth = 0) => {
+          if (depth > 8 || !obj || typeof obj !== 'object') return;
+          if (Array.isArray(obj)) {
+            if (obj.length && looksLikeDiamonds(obj.slice(0, 2))) {
+              console.log(`  [JA] __NEXT_DATA__ hit: ${obj.length} items`);
+              intercepted.push(...obj);
+            }
+            return;
+          }
+          for (const val of Object.values(obj)) walk(val, depth + 1);
+        };
+        walk(nextData);
+      }
+
+      // Log all frames — diamonds may render inside an iframe
+      const allFrames = page.frames();
+      console.log(`  [JA] Frames (${allFrames.length}): ${allFrames.map(f => f.url().slice(0,80)).join(' | ')}`);
+
+      // Try DOM extraction from every frame
+      const isLabPage = pageUrl.includes('lab-grown');
+      for (const frame of allFrames) {
+        const items = await frame.evaluate(() => {
+          // Log all links with numeric IDs for debugging
+          const allLinks = [...document.querySelectorAll('a[href]')]
+            .map(a => a.href).filter(h => /\d{5,}/.test(h));
+          if (allLinks.length) console.log('Links with IDs:', allLinks.slice(0,5).join(', '));
+
+          const results = [];
+          const cards = [...document.querySelectorAll('a[href]')]
+            .filter(a => /\d{5,}/.test(a.href));
+          for (const card of cards) {
+            const txt = card.innerText || '';
+            const href = card.href || '';
+            const idM = href.match(/(\d{5,})/);
+            const priceM = txt.match(/\$([\d,]+)/);
+            const caratM = txt.match(/([\d.]+)\s*[Cc]t/);
+            const colorM = txt.match(/\b([D-M])\b/);
+            const clarityM = txt.match(/\b(FL|IF|VVS1|VVS2|VS1|VS2|SI1|SI2|I1|I2)\b/);
+            const shapeM = txt.match(/\b(Round|Oval|Cushion|Emerald|Pear|Marquise|Radiant|Asscher|Princess|Heart)\b/i);
+            const cutM = txt.match(/\b(Ideal|Excellent|Very Good|Good|Fair|Super Ideal|Astor)\b/i);
+            const labM = txt.match(/\b(GIA|IGI|AGS|GCAL)\b/);
+            if (idM && priceM) {
+              results.push({
+                id: idM[1], price: priceM[1].replace(/,/g, ''),
+                carat: caratM?.[1] ?? null, color: colorM?.[1] ?? null,
+                clarity: clarityM?.[1] ?? null, shape: shapeM?.[1] ?? null,
+                cut: cutM?.[1] ?? null, lab: labM?.[1] ?? null, href,
+              });
+            }
+          }
+          return results;
+        }).catch(() => []);
+
+        if (items.length) {
+          console.log(`  [JA] DOM: ${items.length} cards from frame ${frame.url().slice(0,60)} (${isLabPage ? 'lab' : 'mined'})`);
+          for (const d of items) intercepted.push({ ...d, _isLab: isLabPage });
+        }
+      }
+
+      const prevCount = collected.size;
+      for (const p of intercepted.splice(0)) {
+        const parsed = parseJAProduct(p, null);
+        if (parsed && !collected.has(parsed['Vendor SKU'])) {
+          collected.set(parsed['Vendor SKU'], parsed);
+        }
+      }
+      console.log(`  [JA] Running total: ${collected.size} (+${collected.size - prevCount})`);
+      await jitter(1200, 2500);
+    }
+  });
 
   const rows = [...collected.values()];
   console.log(`[James Allen] Total: ${rows.length} diamonds`);
   if (rows.length) saveCsv('jamesallen.csv', rows);
-  else console.log('  [JA] No data intercepted. JA may use an obfuscated endpoint — open DevTools Network tab and look for XHR calls returning JSON arrays while on a JA diamond listing page.');
+  else console.log('  [JA] Could not capture JA data. Their anti-bot is too strong for Puppeteer.');
 }
 
 // ── Clean Origin ──────────────────────────────────────────────────────────────
@@ -269,40 +451,91 @@ async function scrapeCleanOrigin(browser) {
   console.log('\n[Clean Origin] Starting...');
   const items = [];
 
-  // Collect all diamond links across listing pages
-  const allLinks = [];
+  // Navigate to shape pages (which we know load without 403) and intercept API
+  const SHAPES = ['Round','Princess','Radiant','Heart','Oval','Cushion','Pear','Emerald','Marquise','Asscher'];
+  const collected = new Map(); // SKU → item
+
   await withPage(browser, async (page) => {
-    let listUrl = 'https://www.cleanorigin.com/diamonds/?product_list_limit=100';
-    while (listUrl) {
-      console.log(`  [CO] Listing page: ${listUrl}`);
-      await page.goto(listUrl, { waitUntil: 'networkidle2', timeout: 90000 });
+    // Intercept all JSON responses
+    page.on('response', async (response) => {
+      const ct = response.headers()['content-type'] || '';
+      if (!ct.includes('json')) return;
+      try {
+        const json = await response.json();
+        const products = Array.isArray(json) ? json
+          : json.products || json.items || json.diamonds || json.data || json.results
+          || json.items_data || json.collection;
+        if (!products || !Array.isArray(products) || !products.length) return;
+        if (!looksLikeDiamonds(products.slice(0, 3))) return;
+        console.log(`  [CO] API hit: ${response.url()} (${products.length} items)`);
+        for (const p of products) {
+          const key = p.sku || p.id || p.certificate_number || JSON.stringify(p).slice(0,40);
+          if (!collected.has(key)) collected.set(key, p);
+        }
+      } catch (_) {}
+    });
+
+    // Load homepage first to establish session
+    console.log('  [CO] Loading homepage...');
+    await page.goto('https://www.cleanorigin.com/', { waitUntil: 'networkidle2', timeout: 60000 });
+    await waitForChallenge(page, 'Clean Origin');
+    await sleep(3000);
+
+    // Navigate to each shape page via JS (inherits session)
+    for (const shape of SHAPES) {
+      const shapeUrl = `https://www.cleanorigin.com/diamonds/?diamond_shape=${shape}`;
+      console.log(`  [CO] Loading shape: ${shape}`);
+      await page.evaluate(url => { location.href = url; }, shapeUrl);
+      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 45000 }).catch(() => {});
       await waitForChallenge(page, 'Clean Origin');
+      await sleep(2000);
 
-      const links = await page.$$eval(
-        'table.diamonds-listing tr.listing-row td[data-attr="diamond_link"] a',
-        els => els.map(el => el.href)
-      ).catch(() => []);
-
-      if (!links.length) {
-        // Alternate selectors
-        const alt = await page.$$eval(
-          'a[href*="/lab-created-diamond/"], a[href*="/diamond/"]',
-          els => [...new Set(els.map(el => el.href).filter(h => h.includes('cleanorigin.com')))]
-        ).catch(() => []);
-        allLinks.push(...alt);
-        if (!alt.length) { console.log('  [CO] No links found on listing page, stopping.'); break; }
-      } else {
-        allLinks.push(...links);
+      // Slow scroll to trigger all lazy-loaded API calls
+      for (let i = 1; i <= 6; i++) {
+        await page.evaluate(n => window.scrollTo(0, document.body.scrollHeight * n / 6), i);
+        await sleep(1500);
       }
+      await sleep(2000);
 
-      console.log(`  [CO] Found ${links.length} links (${allLinks.length} total)`);
-
-      // Next page
-      const nextHref = await page.$eval('.pages-item-next a', el => el.href).catch(() => null);
-      listUrl = nextHref || null;
-      if (listUrl) await sleep(1500);
+      const pageTitle = await page.title().catch(() => '');
+      console.log(`  [CO] ${shape}: page="${pageTitle}", total collected=${collected.size}`);
     }
   });
+
+  if (collected.size) {
+    console.log(`  [CO] API captured ${collected.size} items`);
+    for (const p of collected.values()) {
+      const certId = p.certificate_number || p.certNumber || p.cert_id || null;
+      const lab = String(p.grading_lab || p.lab || 'IGI').toUpperCase();
+      items.push({
+        Vendor: 'Clean Origin',
+        'Vendor SKU': p.sku || p.id || null,
+        Link: p.url ? (p.url.startsWith('http') ? p.url : 'https://www.cleanorigin.com' + p.url) : null,
+        Price: p.price || p.retail_price,
+        Shape: normalizeShape(p.shape),
+        'Carat Weight': p.carat || p.carat_weight,
+        'Color Grade': p.color,
+        'Cut Grade': p.cut,
+        'Clarity Grade': p.clarity,
+        Fluorescence: p.fluorescence,
+        'Polish Grade': p.polish,
+        'Symmetry Grade': p.symmetry,
+        'Grading Lab': lab,
+        'Grading Certificate ID': certId,
+        'Grading Link': certId && lab === 'IGI'
+          ? `https://www.igi.org/reports/verify-your-report?r=${certId}`
+          : certId && lab === 'GIA'
+          ? `https://www.gia.edu/report-check?reportno=${certId}`
+          : null,
+        Origin: 'Lab Grown',
+      });
+    }
+    console.log(`[Clean Origin] Total: ${items.length} diamonds`);
+    if (items.length) saveCsv('cleanorigin.csv', items);
+    return;
+  }
+
+  console.log('  [CO] No API data found on shape pages.');
 
   console.log(`  [CO] Total links to scrape: ${allLinks.length}`);
 
@@ -419,13 +652,17 @@ async function scrapeCleanOrigin(browser) {
 
 // ── Brilliant Earth ───────────────────────────────────────────────────────────
 
-function parseBEDiamond(d) {
+function parseBEDiamond(d, sectionLabel) {
   const certId = d.certificate_number || null;
   const lab = String(d.report || '').toUpperCase() || null;
   const mParts = (d.measurements || '').split('x').map(s => parseFloat(s.trim()));
   const [mLen, mWid, mDep] = mParts;
-  const originRaw = String(d.origin || '').toLowerCase();
-  const origin = originRaw.includes('lab') ? 'Lab Grown' : 'Mined';
+  // Use sectionLabel as the authoritative source — BE's `origin` field is unreliable for lab
+  const origin = sectionLabel === 'Lab'
+    ? 'Lab Grown'
+    : sectionLabel === 'Natural'
+    ? 'Mined'
+    : (String(d.origin || '').toLowerCase().includes('lab') ? 'Lab Grown' : 'Mined');
   return {
     Vendor: 'Brilliant Earth',
     'Vendor SKU': d.upc || String(d.id),
@@ -475,17 +712,30 @@ async function scrapeBrilliantEarth(browser) {
     let apiTemplate = null;
 
     await withPage(browser, async (page) => {
-      // Capture the first API call the page makes
+      // Log all BE API calls so we can see what the lab page fires
       page.on('response', async (response) => {
+        const u = response.url();
+        if (!u.includes('brilliantearth.com')) return;
+        const ct = response.headers()['content-type'] || '';
+        if (ct.includes('json') || u.includes('/api/') || u.includes('/plp/') || u.includes('/products/')) {
+          console.log(`  [BE] ${label} response: ${u.slice(0, 140)}`);
+        }
         if (apiTemplate) return;
-        if (!response.url().includes('/api/v1/plp/products/')) return;
-        apiTemplate = response.url();
-        console.log(`  [BE] Captured ${label} API URL`);
+        // Accept any BE API URL that returns product/diamond data
+        if (u.includes('/plp/') || u.includes('/api/v1/') || u.includes('/products/')) {
+          try {
+            const json = await response.json();
+            if (json.products && Array.isArray(json.products)) {
+              apiTemplate = u;
+              console.log(`  [BE] Captured ${label} API URL: ${u.slice(0, 120)}`);
+            }
+          } catch (_) {}
+        }
       });
 
       await page.goto(startUrl, { waitUntil: 'networkidle2', timeout: 90000 });
       await waitForChallenge(page, 'Brilliant Earth');
-      await sleep(3000);
+      await sleep(5000);
 
       if (!apiTemplate) {
         console.log(`  [BE] No API call captured for ${label} — skipping`);
@@ -524,12 +774,13 @@ async function scrapeBrilliantEarth(browser) {
 
         for (const d of products) {
           const id = String(d.id || d.upc);
-          if (!collected.has(id)) collected.set(id, parseBEDiamond(d));
+          if (!collected.has(id)) collected.set(id, parseBEDiamond(d, label));
         }
 
         if (products.length < 50) break;
         pageNum++;
-        await sleep(600);
+        await maybeLongPause(pageNum);
+        await jitter(600, 1600);
       }
 
       console.log(`  [BE] ${label}: ${fetched} fetched, ${collected.size} total unique`);

@@ -2,7 +2,10 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Papa from 'papaparse';
 import { Charts } from './Charts.jsx';
 
-const VENDOR_FILES = ['brilliantearth', 'jamesallen', 'cleanorigin'];
+const VENDOR_FILES = {
+  diamonds:    ['brilliantearth', 'jamesallen', 'cleanorigin', 'bluenile'],
+  moissanite:  ['brilliantearth_moi', 'charlesandcolvard'],
+};
 
 const SORTABLE_COLS = [
   { key: 'Price', label: 'Price' },
@@ -51,8 +54,35 @@ function sortRows(rows, col, dir) {
   });
 }
 
-function useLocalStorage(key, def) {
+const DEFAULT_WEIGHTS = { carat: 10, cut: 5, color: 3, clarity: 1 };
+
+function parseUrlFilters() {
+  const p = new URLSearchParams(window.location.search);
+  const getArr = k => p.has(k) ? p.get(k).split(',').map(s => decodeURIComponent(s)).filter(Boolean) : null;
+  const getNum = k => p.has(k) ? Number(p.get(k)) : null;
+  return {
+    shapes:   getArr('shapes'),
+    origins:  getArr('origins'),
+    vendors:  getArr('vendors'),
+    labs:     getArr('labs'),
+    colors:   getArr('colors'),
+    cuts:     getArr('cuts'),
+    priceMax: getNum('priceMax'),
+    caratMin: getNum('caratMin'),
+    weights: (p.has('wCarat') || p.has('wCut') || p.has('wColor') || p.has('wClarity')) ? {
+      carat:   getNum('wCarat')   ?? DEFAULT_WEIGHTS.carat,
+      cut:     getNum('wCut')     ?? DEFAULT_WEIGHTS.cut,
+      color:   getNum('wColor')   ?? DEFAULT_WEIGHTS.color,
+      clarity: getNum('wClarity') ?? DEFAULT_WEIGHTS.clarity,
+    } : null,
+  };
+}
+
+const URL_INIT = parseUrlFilters();
+
+function useLocalStorage(key, def, urlOverride) {
   const [val, setVal] = useState(() => {
+    if (urlOverride !== null && urlOverride !== undefined) return urlOverride;
     try { return JSON.parse(localStorage.getItem(key)) ?? def; }
     catch { return def; }
   });
@@ -72,24 +102,62 @@ function toggle(arr, val) {
 }
 
 export default function App() {
+  const [mode, setMode] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get('mode') === 'moissanite' ? 'moissanite' : 'diamonds';
+  });
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadedVendors, setLoadedVendors] = useState([]);
 
-  const [shapes, setShapes] = useLocalStorage('df_shapes', []);
-  const [origins, setOrigins] = useLocalStorage('df_origins', []);
-  const [vendors, setVendors] = useLocalStorage('df_vendors', []);
-  const [labs, setLabs] = useLocalStorage('df_labs', []);
-  const [priceMax, setPriceMax] = useLocalStorage('df_priceMax', 3000);
-  const [caratMin, setCaratMin] = useLocalStorage('df_caratMin', 0);
+  const [shapes, setShapes] = useLocalStorage('df_shapes', [], URL_INIT.shapes);
+  const [origins, setOrigins] = useLocalStorage('df_origins', [], URL_INIT.origins);
+  const [vendors, setVendors] = useLocalStorage('df_vendors', [], URL_INIT.vendors);
+  const [labs, setLabs] = useLocalStorage('df_labs', [], URL_INIT.labs);
+  const [colors, setColors] = useLocalStorage('df_colors', [], URL_INIT.colors);
+  const [cuts, setCuts] = useLocalStorage('df_cuts', [], URL_INIT.cuts);
+  const [priceMax, setPriceMax] = useLocalStorage('df_priceMax', 3000, URL_INIT.priceMax);
+  const [caratMin, setCaratMin] = useLocalStorage('df_caratMin', 0, URL_INIT.caratMin);
   const [sort, setSort] = useState({ col: 'Price', dir: 'asc' });
   const [selected, setSelected] = useState(null);
   const selectedRowRef = useRef(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [weights, setWeights] = useState(URL_INIT.weights ?? DEFAULT_WEIGHTS);
+
+  // Sync filters → URL
+  useEffect(() => {
+    const p = new URLSearchParams();
+    if (mode !== 'diamonds') p.set('mode', mode);
+    if (shapes.length)  p.set('shapes',   shapes.map(encodeURIComponent).join(','));
+    if (origins.length) p.set('origins',  origins.map(encodeURIComponent).join(','));
+    if (vendors.length) p.set('vendors',  vendors.map(encodeURIComponent).join(','));
+    if (labs.length)    p.set('labs',     labs.map(encodeURIComponent).join(','));
+    if (colors.length)  p.set('colors',   colors.map(encodeURIComponent).join(','));
+    if (cuts.length)    p.set('cuts',     cuts.map(encodeURIComponent).join(','));
+    if (priceMax !== 3000) p.set('priceMax', priceMax);
+    if (caratMin !== 0)    p.set('caratMin', caratMin);
+    p.set('wCarat',   weights.carat);
+    p.set('wCut',     weights.cut);
+    p.set('wColor',   weights.color);
+    p.set('wClarity', weights.clarity);
+    const qs = p.toString();
+    history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+  }, [mode, shapes, origins, vendors, labs, colors, cuts, priceMax, caratMin, weights]);
+
+  function shareFilters() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    });
+  }
 
   useEffect(() => {
     const loaded = [];
+    setRows([]);
+    setLoading(true);
     Promise.all(
-      VENDOR_FILES.map(v =>
+      VENDOR_FILES[mode].map(v =>
         fetch(`/data/${v}.csv`)
           .then(r => r.ok ? r.text() : null)
           .then(text => {
@@ -108,7 +176,7 @@ export default function App() {
       setLoadedVendors(loaded);
       setLoading(false);
     });
-  }, []);
+  }, [mode]);
 
   const filtered = useMemo(() => {
     let out = rows;
@@ -116,10 +184,12 @@ export default function App() {
     if (origins.length) out = out.filter(r => origins.includes(r.Origin));
     if (vendors.length) out = out.filter(r => vendors.includes(r.Vendor));
     if (labs.length) out = out.filter(r => labs.includes(r['Grading Lab']));
+    if (colors.length) out = out.filter(r => colors.includes(r['Color Grade']));
+    if (cuts.length) out = out.filter(r => cuts.includes(r['Cut Grade']));
     out = out.filter(r => parseFloat(r.Price) <= priceMax);
     if (caratMin > 0) out = out.filter(r => parseFloat(r['Carat Weight']) >= caratMin);
     return sortRows(out, sort.col, sort.dir);
-  }, [rows, shapes, origins, vendors, labs, priceMax, caratMin, sort]);
+  }, [rows, shapes, origins, vendors, labs, colors, cuts, priceMax, caratMin, sort]);
 
   const sortBy = col => setSort(s =>
     s.col === col ? { col, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' }
@@ -137,6 +207,8 @@ export default function App() {
   const dataOrigins = useMemo(() => uniq(rows, 'Origin'), [rows]);
   const dataVendors = useMemo(() => uniq(rows, 'Vendor'), [rows]);
   const dataLabs = useMemo(() => uniq(rows, 'Grading Lab'), [rows]);
+  const dataColors = useMemo(() => [...new Set(rows.map(r => r['Color Grade']).filter(Boolean))].sort((a, b) => COLOR_ORDER.indexOf(a) - COLOR_ORDER.indexOf(b)), [rows]);
+  const dataCuts = useMemo(() => [...new Set(rows.map(r => r['Cut Grade']).filter(Boolean))].sort((a, b) => CUT_ORDER.indexOf(a) - CUT_ORDER.indexOf(b)), [rows]);
 
   if (loading) {
     return (
@@ -151,7 +223,14 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div className="header-inner">
-          <h1>Diamond Finder <span style={{fontSize:11,fontWeight:400,color:'#9ca3af'}}>v2</span></h1>
+          <button className="filter-toggle" onClick={() => setSidebarOpen(o => !o)} aria-label="Toggle filters">
+            ☰ Filters
+          </button>
+          <h1>Diamond Finder</h1>
+          <div className="mode-tabs">
+            <button className={`mode-tab${mode === 'diamonds' ? ' active' : ''}`} onClick={() => setMode('diamonds')}>Diamonds</button>
+            <button className={`mode-tab${mode === 'moissanite' ? ' active' : ''}`} onClick={() => setMode('moissanite')}>Moissanite</button>
+          </div>
           <div className="header-meta">
             <span>{filtered.length.toLocaleString()} results</span>
             <span className="dot">·</span>
@@ -163,11 +242,15 @@ export default function App() {
               </>
             )}
           </div>
+          <button className="share-btn" onClick={shareFilters}>
+            {shareCopied ? 'Copied!' : 'Share filters'}
+          </button>
         </div>
       </header>
 
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
       <div className="layout">
-        <aside className="sidebar">
+        <aside className={`sidebar${sidebarOpen ? ' sidebar-open' : ''}`}>
           <div className="filter-section">
             <div className="filter-label">
               Max Price
@@ -216,17 +299,28 @@ export default function App() {
             onToggle={v => setLabs(toggle(labs, v))}
             onClear={() => setLabs([])}
           />
+          <FilterGroup
+            label="Color" options={dataColors} selected={colors}
+            onToggle={v => setColors(toggle(colors, v))}
+            onClear={() => setColors([])}
+          />
+          <FilterGroup
+            label="Cut" options={dataCuts} selected={cuts}
+            onToggle={v => setCuts(toggle(cuts, v))}
+            onClear={() => setCuts([])}
+          />
 
           <button
             className="reset-btn"
-            onClick={() => { setShapes([]); setOrigins([]); setVendors([]); setLabs([]); setPriceMax(3000); setCaratMin(0); }}
+            onClick={() => { setShapes([]); setOrigins([]); setVendors([]); setLabs([]); setColors([]); setCuts([]); setPriceMax(3000); setCaratMin(0); }}
           >
             Reset all filters
           </button>
         </aside>
 
         <main className="results">
-          <Charts rows={filtered} selected={selected} onSelect={handleSelect} />
+          <AboutBanner mode={mode} />
+          <Charts rows={filtered} selected={selected} onSelect={handleSelect} weights={weights} onWeightsChange={setWeights} mode={mode} />
 
           {selected && (
             <div className="selected-card">
@@ -258,6 +352,11 @@ export default function App() {
             <div className="empty">No diamonds match your filters.</div>
           ) : (
             <div className="table-wrap">
+              {filtered.length > 500 && (
+                <div className="table-cap-notice">
+                  Showing first 500 of {filtered.length.toLocaleString()} results — use filters to narrow down.
+                </div>
+              )}
               <table>
                 <thead>
                   <tr>
@@ -277,7 +376,7 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r, i) => {
+                  {filtered.slice(0, 500).map((r, i) => {
                     const isSel = selected &&
                       `${selected.Vendor}::${selected['Vendor SKU']}::${selected.Price}` ===
                       `${r.Vendor}::${r['Vendor SKU']}::${r.Price}`;
@@ -297,6 +396,48 @@ export default function App() {
           )}
         </main>
       </div>
+    </div>
+  );
+}
+
+function AboutBanner({ mode }) {
+  const [open, setOpen] = useState(false);
+  const [sources, setSources] = useState(null);
+
+  useEffect(() => {
+    fetch('/data/sources.json').then(r => r.json()).then(setSources).catch(() => {});
+  }, []);
+
+  const modeKey = mode === 'moissanite' ? 'moissanite' : 'diamonds';
+  const scrapeList = sources?.[modeKey] || [];
+
+  return (
+    <div className="about-banner">
+      <div className="about-summary">
+        <strong>Diamond &amp; Moissanite Finder</strong> — compare lab-grown and natural diamonds (or moissanite) across vendors.
+        Use the <strong>Diamonds / Moissanite</strong> toggle at the top to switch gemstone types.
+        Use the filters on the left to narrow by shape, price, carat, and more.
+        Click any chart point or table row to see details and a link to buy.
+        {' '}
+        <button className="about-toggle" onClick={() => setOpen(o => !o)}>
+          {open ? 'Hide info' : 'How it works'}
+        </button>
+        {scrapeList.length > 0 && (
+          <span className="scrape-dates">
+            {' '}Data last updated: {scrapeList.map(s => `${s.vendor} ${s.scraped}`).join(' · ')}
+          </span>
+        )}
+      </div>
+      {open && (
+        <div className="about-details">
+          <p><strong>What is this?</strong> A tool to browse and compare diamonds and moissanite from multiple vendors side-by-side. Data is scraped periodically so prices may vary — always verify on the vendor's site before purchasing.</p>
+          <p><strong>Diamond vendors:</strong> Brilliant Earth, James Allen, Clean Origin. Lab-grown diamonds are significantly cheaper than mined for the same specs.</p>
+          <p><strong>Moissanite vendors:</strong> Brilliant Earth, Charles &amp; Colvard. Moissanite is a lab-grown gemstone that looks nearly identical to a diamond but costs a fraction of the price. Switch to Moissanite mode using the toggle in the header.</p>
+          <p><strong>The 4 C's:</strong> Diamonds and moissanite are graded on four attributes. <strong>Carat</strong> is the weight of the stone — bigger is more expensive. <strong>Cut</strong> determines how well the stone reflects light; Ideal and Excellent are the best grades. <strong>Color</strong> is graded D (colorless, best) through M (noticeable yellow tint). <strong>Clarity</strong> measures internal flaws, from FL (flawless) down to I3 (heavily included) — VS1/VS2 and SI1 offer good value since flaws are invisible to the naked eye.</p>
+          <p><strong>Charts:</strong> The "All Attributes" view lets you drag axes to filter by multiple dimensions at once. The scatter charts show price vs. a single attribute — click any dot to highlight that stone in the table below. The "Value Score" chart lets you assign a weight to each of the 4 C's — a higher number means that attribute matters more to you. Stones are scored based on those weights and plotted against price, so the top-right of the chart shows the highest-scoring stones at the lowest prices.</p>
+          <p><strong>Tips:</strong> Sort by Price ↑ to find the best deals. Filter by shape first (Round and Oval tend to have the most inventory). Lab-grown stones offer the best value per carat.</p>
+        </div>
+      )}
     </div>
   );
 }

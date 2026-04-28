@@ -1,0 +1,12 @@
+{
+  "diamonds": [
+    { "vendor": "Brilliant Earth", "file": "brilliantearth", "scraped": "2026-04-13" },
+    { "vendor": "James Allen",     "file": "jamesallen",     "scraped": "2026-04-13" },
+    { "vendor": "Clean Origin",    "file": "cleanorigin",    "scraped": "2026-04-13" },
+    { "vendor": "Blue Nile",       "file": "bluenile",       "scraped": "2026-04-14" }
+  ],
+  "moissanite": [
+    { "vendor": "Brilliant Earth",    "file": "brilliantearth_moi", "scraped": "2026-04-13" },
+    { "vendor": "Charles & Colvard",  "file": "charlesandcolvard",  "scraped": "2026-04-13" }
+  ]
+}
